@@ -14,6 +14,7 @@ export default defineConfig({
         react: { singleton: true, requiredVersion: '19.2.5' },
         'react-dom': { singleton: true, requiredVersion: '19.2.5' },
       },
+      dts: false
     }),
     react(),
   ],

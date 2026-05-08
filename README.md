@@ -17,6 +17,8 @@ This breaks any host that relies on a "best-effort" availability check (e.g. HEA
 
 Both apps are vanilla Vite + React 19 + `@module-federation/vite`. Host has a single `lazy(() => import('remote/Widget'))` wrapped in a Suspense + Error Boundary.
 
+**Important:** the bug only manifests in **build/preview** mode, not in `vite dev`. Run the host with `npm run build && npm run preview`, not `npm run dev`.
+
 ```bash
 # install
 ( cd remote && npm install )
@@ -46,6 +48,25 @@ Both apps are vanilla Vite + React 19 + `@module-federation/vite`. Host has a si
 **Actual on 1.14.5:** "Host mounted" renders. The error boundary catches the failed `import('remote/Widget')` and shows a local error message. Graceful degradation works as expected.
 
 Switch back with `npm run use:1.15`.
+
+## Environment
+
+* `@module-federation/vite` 1.15.2 (broken) vs 1.14.5 (works)
+* Vite 7.x
+* React 19.2.5
+* Node 20+
+* Reproduces under `vite build && vite preview` (and therefore in any deployed build). Does **not** reproduce under `vite` dev mode.
+
+## Files of interest in this repro
+
+* `host/src/App.jsx` — the literal `lazy(() => import('remote/Widget'))` that triggers the issue
+* `host/vite.config.js` — minimal federation host config
+* `remote/vite.config.js` — minimal federation remote exposing `./Widget`
+
+---
+
+# Claude analysis:
+Including this at the end in case its helpful with the caveot that I am not familiar with the module-federation source code at all.
 
 ## Root cause
 
@@ -83,6 +104,20 @@ So *any* host that does a literal `import('remote/exposed')` anywhere in its mod
 
 1.14.x has no `getBootstrapSource` and no `__mfRemotePreloads` — the host entry imports immediately after `initHost()` resolves, and individual remote imports succeed-or-fail independently at the call site.
 
+### Why dev mode hides the bug
+
+`addUsedRemote(remoteName, source)` is called from `pluginProxyRemotes.resolveRemoteId`, which only fires when Vite actually transforms a source file containing `import('remote/x')`.
+
+In `vite dev`, modules are transformed lazily on-request:
+
+1. Browser fetches the host page. Vite serves the bootstrap script.
+2. `getBootstrapSource` runs **now** and reads `usedRemotesMap` — at this point it only contains the bare `'remote'` entry from the plugin's `config` hook (line 4334).
+3. Bare entries are filtered out (line 1846 `remote !== remoteKey`), so `__mfRemotePreloads` is empty.
+4. `Promise.all([])` resolves trivially → host entry imports → React mounts.
+5. `App.jsx` is now requested, and `import('remote/Widget')` is registered into `usedRemotesMap` — but the bootstrap has already run.
+
+In `vite build`, Rollup AOT-resolves the entire module graph before the bootstrap is emitted, so every `import('remote/x')` is already in `usedRemotesMap` when the preload list is generated. Hence: the bug appears in build/preview but not in dev.
+
 ## Suggested fixes (any of these would unblock us)
 
 1. **Wrap each preload in `.catch`** so one dead remote doesn't sink the whole bootstrap. The host's existing per-call error handling (Suspense / Error Boundary / try-catch) can then handle the eventual failure when the consumer actually needs the module:
@@ -98,19 +133,3 @@ So *any* host that does a literal `import('remote/exposed')` anywhere in its mod
 2. **Use `Promise.allSettled`** instead of `Promise.all`. Same effect — the bootstrap completes regardless of individual remote failures, and the host gets to mount.
 
 3. **Add a plugin option** (`preloadUsedRemotes: false` or similar) to opt out of the eager preload entirely. We'd opt out and rely on lazy `import()` like we did on 1.14.
-
-The behavior change should at minimum be documented; even with the preload kept, swallowing failures (or making it opt-in) would restore the existing graceful-degradation pattern.
-
-## Environment
-
-* `@module-federation/vite` 1.15.2 (broken) vs 1.14.5 (works)
-* Vite 7.x
-* React 19.2.5
-* Node 20+
-* Reproduces in `vite` (dev mode); also reproduces under `vite build && vite preview`.
-
-## Files of interest in this repro
-
-* `host/src/App.jsx` — the literal `lazy(() => import('remote/Widget'))` that triggers the issue
-* `host/vite.config.js` — minimal federation host config
-* `remote/vite.config.js` — minimal federation remote exposing `./Widget`
