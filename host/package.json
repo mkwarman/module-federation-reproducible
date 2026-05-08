@@ -1,0 +1,22 @@
+{
+  "name": "host",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "use:1.14": "npm install @module-federation/vite@1.14.5",
+    "use:1.15": "npm install @module-federation/vite@1.15.2"
+  },
+  "dependencies": {
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@module-federation/vite": "1.15.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^7.0.0"
+  }
+}
