@@ -21,12 +21,12 @@ Both apps are vanilla Vite + React 19 + `@module-federation/vite`. Host has a si
 
 ```bash
 # install
-( cd remote && npm install )
-( cd host   && npm install )   # installs 1.15.2 by default
+cd remote && npm install
+cd host   && npm install   # installs 1.15.2 by default
 
 # success path: remote up, host on 1.15
-( cd remote && npm run build && npm run preview )    # terminal 1, port 5174
-( cd host   && npm run build && npm run preview )    # terminal 2, port 5173
+npm run build && npm run preview    # terminal 1, port 5174
+npm run build && npm run preview    # terminal 2, port 5173
 # open http://localhost:5173 → "Host mounted" + "Widget rendered from remote"
 ```
 
@@ -41,7 +41,8 @@ Both apps are vanilla Vite + React 19 + `@module-federation/vite`. Host has a si
 ### The same code works on 1.14
 
 ```bash
-( cd host && npm run use:1.14 && npm run build && npm run preview )
+# stop the host (Ctrl+C in terminal 2), then run
+npm run use:1.14 && npm run build && npm run preview
 # reload http://localhost:5173 with the remote still down
 ```
 
